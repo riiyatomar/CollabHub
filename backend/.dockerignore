@@ -1,0 +1,14 @@
+node_modules
+dist
+.env
+.env.*
+!.env.example
+npm-debug.log
+logs
+Dockerfile
+.dockerignore
+.git
+.github
+.agents
+.claude
+.windsurf

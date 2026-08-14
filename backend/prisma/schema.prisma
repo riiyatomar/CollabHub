@@ -1,0 +1,742 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                      String                @id @default(uuid())
+  name                    String
+  username                String                @unique
+  email                   String                @unique
+  password                String
+  avatar                  String?
+  bio                     String?
+  role                    Role                  @default(USER)
+  isVerified              Boolean               @default(false)
+  isActive                Boolean               @default(true)
+  lastLogin               DateTime?
+  verificationToken       String?
+  verificationExpires     DateTime?
+  resetToken              String?
+  resetExpires            DateTime?
+  refreshToken            String?
+  statusMessage           String?
+  themePreference         String                @default("system")
+  language                String                @default("en")
+  notificationPreferences Json?
+  privacySettings         Json?
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+  deletedAt               DateTime?
+  activityLogs            ActivityLog[]
+  bookmarks               Bookmark[]
+  channelReadStates       ChannelReadState[]
+  meetingParticipants     MeetingParticipant[]
+  hostedMeetings          Meeting[]             @relation("MeetingHost")
+  sentMessages            Message[]             @relation("MessageSender")
+  receivedNotifs          Notification[]        @relation("NotifReceiver")
+  sentNotifs              Notification[]        @relation("NotifSender")
+  pinnedMessages          PinnedMessage[]       @relation("MessagePinner")
+  pinnedChannels          PinnedChannel[]       @relation("ChannelPinner")
+  pinnedFiles             PinnedFile[]
+  presence                Presence?
+  reactions               Reaction[]
+  uploadedFiles           UploadedFile[]        @relation("UserUploads")
+  hostedWatchSessions     WatchSession[]
+  sentInvitations         WorkspaceInvitation[] @relation("InvitedBy")
+  workspaceMembers        WorkspaceMember[]
+  ownedWorkspaces         Workspace[]           @relation("WorkspaceOwner")
+  whiteboards             Whiteboard[]          @relation("WhiteboardCreator")
+  whiteboardObjects       WhiteboardObject[]    @relation("ObjectCreator")
+  createdTasks            Task[]                @relation("TaskCreator")
+  assignedTasks           Task[]                @relation("TaskAssignee")
+  taskComments            TaskComment[]
+  reminders               Reminder[]
+  aiConversations         AiConversation[]
+
+  @@map("users")
+}
+
+model Workspace {
+  id             String                @id @default(uuid())
+  name           String
+  slug           String                @unique
+  description    String?
+  logo           String?
+  banner         String?
+  ownerId        String
+  visibility     WorkspaceVisibility   @default(PRIVATE)
+  isArchived     Boolean               @default(false)
+  inviteCode     String                @unique @default(uuid())
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  activityLogs   ActivityLog[]
+  channels       Channel[]
+  meetings       Meeting[]
+  files          UploadedFile[]        @relation("WorkspaceFiles")
+  invitations    WorkspaceInvitation[]
+  members        WorkspaceMember[]
+  whiteboards    Whiteboard[]
+  owner          User                  @relation("WorkspaceOwner", fields: [ownerId], references: [id])
+  tasks          Task[]
+  taskLabels     TaskLabel[]
+  calendarEvents CalendarEvent[]
+  integrations   Integration[]
+  webhooks       Webhook[]
+  aiConversations AiConversation[]
+  watchSessions  WatchSession[]
+
+  @@map("workspaces")
+}
+
+model Channel {
+  id             String             @id @default(uuid())
+  workspaceId    String
+  name           String
+  description    String?
+  type           ChannelType        @default(TEXT)
+  isArchived     Boolean            @default(false)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  activityLogs   ActivityLog[]
+  bookmarks      Bookmark[]
+  readStates     ChannelReadState[]
+  workspace      Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  meetings       Meeting[]
+  messages       Message[]
+  pinnedMessages PinnedMessage[]
+  pinnedChannels PinnedChannel[]
+  files          UploadedFile[]     @relation("ChannelFiles")
+  tasks          Task[]
+  watchSessions  WatchSession[]
+  whiteboards    Whiteboard[]
+
+  @@map("channels")
+}
+
+model WorkspaceMember {
+  id          String        @id @default(uuid())
+  workspaceId String
+  userId      String
+  role        WorkspaceRole @default(MEMBER)
+  isMuted     Boolean       @default(false)
+  isSuspended Boolean       @default(false)
+  isBanned    Boolean       @default(false)
+  joinedAt    DateTime      @default(now())
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@map("workspace_members")
+}
+
+model WorkspaceInvitation {
+  id          String           @id @default(uuid())
+  workspaceId String
+  email       String
+  token       String           @unique
+  invitedById String
+  expiresAt   DateTime
+  status      InvitationStatus @default(PENDING)
+  role        WorkspaceRole    @default(MEMBER)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  acceptedAt  DateTime?
+  rejectedAt  DateTime?
+  invitedBy   User             @relation("InvitedBy", fields: [invitedById], references: [id], onDelete: Cascade)
+  workspace   Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("workspace_invitations")
+}
+
+model Message {
+  id          String         @id @default(uuid())
+  channelId   String
+  senderId    String
+  content     String
+  replyToId   String?
+  isDeleted   Boolean        @default(false)
+  isEdited    Boolean        @default(false)
+  editedAt    DateTime?
+  deletedAt   DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  bookmarks   Bookmark[]
+  channel     Channel        @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  replyTo     Message?       @relation("MessageReplies", fields: [replyToId], references: [id])
+  replies     Message[]      @relation("MessageReplies")
+  sender      User           @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  pinnedBy    PinnedMessage?
+  reactions   Reaction[]
+  attachments UploadedFile[] @relation("MessageAttachments")
+  tasks       Task[]
+
+  @@index([channelId])
+  @@index([channelId, createdAt(sort: Desc)])
+  @@map("messages")
+}
+
+model Notification {
+  id          String           @id @default(uuid())
+  receiverId  String
+  senderId    String?
+  title       String
+  message     String
+  link        String?
+  isRead      Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+  entityId    String?
+  entityType  EntityType?
+  icon        String?
+  isArchived  Boolean          @default(false)
+  readAt      DateTime?
+  type        NotificationType
+  workspaceId String?
+  receiver    User             @relation("NotifReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  sender      User?            @relation("NotifSender", fields: [senderId], references: [id])
+
+  @@index([receiverId])
+  @@index([receiverId, isRead])
+  @@map("notifications")
+}
+
+model Presence {
+  userId             String         @id
+  status             PresenceStatus @default(OFFLINE)
+  lastSeen           DateTime       @default(now())
+  currentChannelId   String?
+  currentWorkspaceId String?
+  lastActiveAt       DateTime       @default(now())
+  user               User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("presences")
+}
+
+model Reaction {
+  id        String   @id @default(uuid())
+  emoji     String
+  messageId String
+  userId    String
+  createdAt DateTime @default(now())
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+  @@map("reactions")
+}
+
+model PinnedMessage {
+  id         String   @id @default(uuid())
+  messageId  String   @unique
+  channelId  String
+  pinnedById String
+  createdAt  DateTime @default(now())
+  channel    Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  message    Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  pinnedBy   User     @relation("MessagePinner", fields: [pinnedById], references: [id], onDelete: Cascade)
+
+  @@map("pinned_messages")
+}
+
+model PinnedChannel {
+  id         String   @id @default(uuid())
+  channelId  String
+  pinnedById String
+  createdAt  DateTime @default(now())
+  channel    Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  pinnedBy   User     @relation("ChannelPinner", fields: [pinnedById], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, pinnedById])
+  @@map("pinned_channels")
+}
+
+model PinnedFile {
+  id         String       @id @default(uuid())
+  fileId     String       @unique
+  pinnedById String
+  createdAt  DateTime     @default(now())
+  file       UploadedFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  pinnedBy   User         @relation(fields: [pinnedById], references: [id], onDelete: Cascade)
+
+  @@map("pinned_files")
+}
+
+model ChannelReadState {
+  id                     String   @id @default(uuid())
+  channelId              String
+  userId                 String
+  lastReadMessageId      String?
+  lastDeliveredMessageId String?
+  updatedAt              DateTime @updatedAt
+  channel                Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user                   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, userId])
+  @@map("channel_read_states")
+}
+
+model UploadedFile {
+  id           String      @id @default(uuid())
+  publicId     String      @unique
+  filename     String
+  originalName String
+  mimeType     String
+  size         Int
+  extension    String
+  checksum     String?
+  folder       String?
+  secureUrl    String
+  thumbnailUrl String?
+  uploadedById String
+  workspaceId  String?
+  channelId    String?
+  messageId    String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  bookmarks    Bookmark[]
+  pinnedFile   PinnedFile?
+  channel      Channel?    @relation("ChannelFiles", fields: [channelId], references: [id], onDelete: Cascade)
+  message      Message?    @relation("MessageAttachments", fields: [messageId], references: [id], onDelete: Cascade)
+  uploadedBy   User        @relation("UserUploads", fields: [uploadedById], references: [id], onDelete: Cascade)
+  workspace    Workspace?  @relation("WorkspaceFiles", fields: [workspaceId], references: [id], onDelete: Cascade)
+  tasks        Task[]      @relation("TaskAttachments")
+
+  @@index([workspaceId])
+  @@index([channelId])
+  @@index([messageId])
+  @@map("uploaded_files")
+}
+
+model ActivityLog {
+  id          String      @id @default(uuid())
+  userId      String?
+  workspaceId String?
+  channelId   String?
+  action      String
+  entityId    String?
+  entityType  EntityType?
+  details     Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime    @default(now())
+  channel     Channel?    @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user        User?       @relation(fields: [userId], references: [id])
+  workspace   Workspace?  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([channelId])
+  @@index([userId])
+  @@index([createdAt(sort: Desc)])
+  @@map("activity_logs")
+}
+
+model Bookmark {
+  id          String        @id @default(uuid())
+  userId      String
+  messageId   String?
+  channelId   String?
+  fileId      String?
+  workspaceId String?
+  category    String?
+  note        String?
+  createdAt   DateTime      @default(now())
+  channel     Channel?      @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  file        UploadedFile? @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  message     Message?      @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("bookmarks")
+}
+
+model Meeting {
+  id           String               @id @default(uuid())
+  title        String
+  workspaceId  String
+  channelId    String?
+  hostId       String
+  status       MeetingStatus        @default(WAITING)
+  startedAt    DateTime?
+  endedAt      DateTime?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  note         MeetingNote?
+  participants MeetingParticipant[]
+  whiteboard   MeetingWhiteboard?
+  channel      Channel?             @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  host         User                 @relation("MeetingHost", fields: [hostId], references: [id], onDelete: Cascade)
+  workspace    Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  watchSession WatchSession?
+
+  @@map("meetings")
+}
+
+model MeetingParticipant {
+  id        String    @id @default(uuid())
+  meetingId String
+  userId    String
+  joinedAt  DateTime  @default(now())
+  leftAt    DateTime?
+  meeting   Meeting   @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, userId])
+  @@map("meeting_participants")
+}
+
+model MeetingWhiteboard {
+  id        String   @id @default(uuid())
+  meetingId String   @unique
+  data      Json     @default("{}")
+  updatedAt DateTime @updatedAt
+  meeting   Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@map("meeting_whiteboards")
+}
+
+model MeetingNote {
+  id        String   @id @default(uuid())
+  meetingId String   @unique
+  content   String   @default("")
+  updatedAt DateTime @updatedAt
+  meeting   Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@map("meeting_notes")
+}
+
+model WatchSession {
+  id               String      @id @default(uuid())
+  meetingId        String?     @unique
+  channelId        String?
+  workspaceId      String?
+  mediaUrl         String
+  hostId           String
+  status           WatchStatus @default(IDLE)
+  playbackPosition Float       @default(0)
+  playbackRate     Float       @default(1)
+  updatedAt        DateTime    @updatedAt
+  createdAt        DateTime    @default(now())
+  host             User        @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  meeting          Meeting?    @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  channel          Channel?    @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  workspace        Workspace?  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([channelId])
+  @@index([workspaceId])
+  @@map("watch_sessions")
+}
+
+model Whiteboard {
+  id          String             @id @default(uuid())
+  workspaceId String
+  channelId   String?            @unique
+  name        String
+  createdById String
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  workspace   Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  channel     Channel?           @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  createdBy   User               @relation("WhiteboardCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  objects     WhiteboardObject[]
+
+  @@map("whiteboards")
+}
+
+model WhiteboardObject {
+  id           String     @id
+  whiteboardId String
+  type         String
+  data         Json
+  createdById  String
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  whiteboard   Whiteboard @relation(fields: [whiteboardId], references: [id], onDelete: Cascade)
+  createdBy    User       @relation("ObjectCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([whiteboardId])
+  @@map("whiteboard_objects")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum WorkspaceVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+enum ChannelType {
+  GENERAL
+  TEXT
+  ANNOUNCEMENT
+}
+
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  MODERATOR
+  MEMBER
+  GUEST
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+enum PresenceStatus {
+  ONLINE
+  OFFLINE
+  AWAY
+  DO_NOT_DISTURB
+}
+
+enum MeetingStatus {
+  WAITING
+  ONGOING
+  ENDED
+}
+
+enum WatchStatus {
+  PLAYING
+  PAUSED
+  IDLE
+}
+
+enum NotificationType {
+  MENTION
+  REPLY
+  REACTION
+  FILE_UPLOADED
+  WORKSPACE_INVITE
+  MEMBER_JOINED
+  MEMBER_LEFT
+  ROLE_CHANGED
+  CHANNEL_CREATED
+  CHANNEL_ARCHIVED
+  MESSAGE_PINNED
+  SYSTEM
+  TASK_ASSIGNED
+  TASK_DUE
+  REMINDER
+  MEETING_STARTING
+  GITHUB_ACTIVITY
+  CALENDAR_EVENT
+  INTEGRATION_EVENT
+}
+
+enum EntityType {
+  MESSAGE
+  FILE
+  CHANNEL
+  WORKSPACE
+  USER
+  WHITEBOARD
+  TASK
+  REMINDER
+  CALENDAR_EVENT
+  INTEGRATION
+  WEBHOOK
+}
+
+model Task {
+  id          String       @id @default(uuid())
+  workspaceId String
+  title       String
+  description String?
+  status      TaskStatus   @default(TODO)
+  priority    TaskPriority @default(MEDIUM)
+  dueDate     DateTime?
+  creatorId   String
+  assigneeId  String?
+  channelId   String?
+  messageId   String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  workspace   Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  creator     User           @relation("TaskCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  assignee    User?          @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  channel     Channel?       @relation(fields: [channelId], references: [id])
+  message     Message?       @relation(fields: [messageId], references: [id])
+  comments    TaskComment[]
+  labels      TaskLabel[]
+  attachments UploadedFile[] @relation("TaskAttachments")
+
+  @@index([workspaceId])
+  @@index([status])
+  @@index([assigneeId])
+  @@map("tasks")
+}
+
+model TaskComment {
+  id        String   @id @default(uuid())
+  taskId    String
+  authorId  String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  task   Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@map("task_comments")
+}
+
+model TaskLabel {
+  id          String @id @default(uuid())
+  workspaceId String
+  name        String
+  color       String
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  tasks     Task[]
+
+  @@map("task_labels")
+}
+
+model Reminder {
+  id        String       @id @default(uuid())
+  userId    String
+  title     String
+  message   String?
+  dueDate   DateTime
+  type      ReminderType
+  entityId  String?
+  isFired   Boolean      @default(false)
+  createdAt DateTime     @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("reminders")
+}
+
+model CalendarEvent {
+  id          String            @id @default(uuid())
+  workspaceId String
+  title       String
+  description String?
+  startTime   DateTime
+  endTime     DateTime
+  type        CalendarEventType
+  entityId    String?
+  isAllDay    Boolean           @default(false)
+  createdAt   DateTime          @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([startTime])
+  @@map("calendar_events")
+}
+
+model Integration {
+  id           String              @id @default(uuid())
+  workspaceId  String
+  provider     IntegrationProvider
+  accessToken  String?
+  refreshToken String?
+  config       Json?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, provider])
+  @@map("integrations")
+}
+
+model Webhook {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  url         String
+  secret      String
+  events      Json
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("webhooks")
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  REVIEW
+  DONE
+  CANCELLED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum ReminderType {
+  TASK
+  MESSAGE
+  MEETING
+  FILE
+  CUSTOM
+}
+
+enum CalendarEventType {
+  MEETING
+  TASK
+  REMINDER
+  CUSTOM
+}
+
+enum IntegrationProvider {
+  GOOGLE
+  GITHUB
+  SLACK
+}
+
+model AiConversation {
+  id          String       @id @default(uuid())
+  userId      String
+  workspaceId String
+  title       String       @default("New Conversation")
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  messages    AiMessage[]
+
+  @@index([userId])
+  @@index([workspaceId])
+  @@map("ai_conversations")
+}
+
+model AiMessage {
+  id             String         @id @default(uuid())
+  conversationId String
+  role           AiMessageRole
+  content        String
+  sourceLinks    Json?
+  createdAt      DateTime       @default(now())
+
+  conversation   AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@map("ai_messages")
+}
+
+enum AiMessageRole {
+  USER
+  MODEL
+  SYSTEM
+}
