@@ -1,7 +1,7 @@
 import { Outlet, Link } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
 import { useTheme } from '../contexts/ThemeContext';
-import { LogOut, User, Menu, Settings, Palette, Keyboard } from 'lucide-react';
+import { LogOut, User, Menu, Settings, Palette } from 'lucide-react';
 import apiClient from '../api/axios';
 import WorkspaceSwitcher from '../components/layout/WorkspaceSwitcher';
 import ChannelSidebar from '../components/layout/ChannelSidebar';
